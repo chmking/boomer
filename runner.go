@@ -180,10 +180,16 @@ func (r *runner) startHatching(spawnCount int, hatchRate int, hatchCompleteFunc 
 	r.hatchRate = hatchRate
 	r.numClients = 0
 
+	// outputs should be started before boomer starts
+	r.outputOnStart()
+
 	go r.spawnWorkers(spawnCount, r.stopChan, hatchCompleteFunc)
 }
 
 func (r *runner) stop() {
+	// outputs should be stopped before boomer stops
+	r.outputOnStop()
+
 	// publish the boomer stop event
 	// user's code can subscribe to this event and do thins like cleaning up
 	Events.Publish("boomer:stop")
