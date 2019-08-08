@@ -320,7 +320,15 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 	rate, _ := msg.Data["hatch_rate"]
 	clients, _ := msg.Data["num_clients"]
+
 	hatchRate := int(rate.(float64))
+	if hatchRate == 0 {
+		// A hatch rate of 0 here indicates that the hatching of the workers
+		// should be done immediately. This with a workaround for boomer
+		// having a different meaning for hatchRate.
+		hatchRate = 1
+	}
+
 	workers := 0
 	if _, ok := clients.(uint64); ok {
 		workers = int(clients.(uint64))
@@ -331,7 +339,7 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 	log.Printf("Recv hatch message from master, num_clients is %d, hatch_rate is %d\n",
 		workers, hatchRate)
 
-	if workers == 0 || hatchRate == 0 {
+	if workers == 0 {
 		// This is a valid scenario. The number of slaves exceeds the amount
 		// of work to be done. This slave should remain idle until given work.
 		return
