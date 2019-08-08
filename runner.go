@@ -363,14 +363,18 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 	log.Printf("Recv hatch message from master, num_clients is %d, hatch_rate is %d\n",
 		workers, hatchRate)
 
+	log.Print("calling sendChannel 'hatching'")
 	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 
+	log.Print("publishing 'boomer:hatch'")
 	Events.Publish("boomer:hatch", workers, hatchRate)
 
+	log.Print("starting rate limiter")
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
 	}
 
+	log.Print("starting hatching")
 	r.startHatching(workers, hatchRate, r.hatchComplete)
 }
 
