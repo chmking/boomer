@@ -196,7 +196,10 @@ func (r *runner) stop() {
 
 	// stop previous goroutines without blocking
 	// those goroutines will exit when r.safeRun returns
-	close(r.stopChan)
+	if r.stopChan != nil {
+		close(r.stopChan)
+	}
+
 	if r.rateLimitEnabled {
 		r.rateLimiter.Stop()
 	}
@@ -324,15 +327,21 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 	} else {
 		workers = int(clients.(int64))
 	}
+
+	log.Printf("Recv hatch message from master, num_clients is %d, hatch_rate is %d\n",
+		workers, hatchRate)
+
 	if workers == 0 || hatchRate == 0 {
-		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
-			workers, hatchRate)
+		// This is a valid scenario. The number of slaves exceeds the amount
+		// of work to be done. This slave should remain idle until given work.
+		return
 	} else {
 		Events.Publish("boomer:hatch", workers, hatchRate)
 
 		if r.rateLimitEnabled {
 			r.rateLimiter.Start()
 		}
+
 		r.startHatching(workers, hatchRate, r.hatchComplete)
 	}
 }
