@@ -222,9 +222,7 @@ func (r *runner) stop() {
 
 	// stop previous goroutines without blocking
 	// those goroutines will exit when r.safeRun returns
-	if r.stopChan != nil {
-		close(r.stopChan)
-	}
+	close(r.stopChan)
 
 	if r.rateLimitEnabled {
 		r.rateLimiter.Stop()
