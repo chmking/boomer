@@ -200,6 +200,8 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 }
 
 func (r *runner) startHatching(spawnCount int, hatchRate int, hatchCompleteFunc func()) {
+	fmt.Printf("startHatching was called with spawn count %d and hatchRate %d\n", spawnCount, hatchRate)
+
 	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
 
