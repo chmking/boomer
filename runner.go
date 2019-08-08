@@ -317,7 +317,6 @@ func (r *slaveRunner) close() {
 }
 
 func (r *slaveRunner) onHatchMessage(msg *message) {
-	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 	rate, _ := msg.Data["hatch_rate"]
 	clients, _ := msg.Data["num_clients"]
 
@@ -344,6 +343,8 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 		// of work to be done. This slave should remain idle until given work.
 		return
 	} else {
+		r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
+
 		Events.Publish("boomer:hatch", workers, hatchRate)
 
 		if r.rateLimitEnabled {
