@@ -380,10 +380,13 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 
 // Runner acts as a state machine.
 func (r *slaveRunner) onMessage(msg *message) {
+	fmt.Printf("Received message: %+v", msg)
+
 	switch r.state {
 	case stateInit:
 		switch msg.Type {
 		case "hatch":
+			fmt.Println("Received a hatch message while init")
 			r.state = stateHatching
 			r.onHatchMessage(msg)
 		case "quit":
@@ -394,6 +397,7 @@ func (r *slaveRunner) onMessage(msg *message) {
 	case stateRunning:
 		switch msg.Type {
 		case "hatch":
+			fmt.Println("Received a hatch message while hatching or running")
 			r.state = stateHatching
 			r.stop()
 			r.onHatchMessage(msg)
@@ -413,6 +417,7 @@ func (r *slaveRunner) onMessage(msg *message) {
 	case stateStopped:
 		switch msg.Type {
 		case "hatch":
+			fmt.Println("Received a hatch message while stopped")
 			r.state = stateHatching
 			r.onHatchMessage(msg)
 		case "quit":
