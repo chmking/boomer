@@ -3,6 +3,7 @@ package boomer
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -125,45 +126,70 @@ func (r *runner) getWeightSum() (weightSum int) {
 func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc func()) {
 	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
+	random := rand.New(rand.NewSource(time.Now().Unix()))
 	weightSum := r.getWeightSum()
-	for _, task := range r.tasks {
-		percent := float64(task.Weight) / float64(weightSum)
-		amount := int(round(float64(spawnCount)*percent, .5, 0))
 
-		if weightSum == 0 {
-			amount = int(float64(spawnCount) / float64(len(r.tasks)))
-		}
-
-		for i := 1; i <= amount; i++ {
-			if r.hatchType == "smooth" {
-				time.Sleep(time.Duration(1000000/r.hatchRate) * time.Microsecond)
-			} else if i%r.hatchRate == 0 {
-				time.Sleep(1 * time.Second)
-			}
-
-			select {
-			case <-quit:
-				// quit hatching goroutine
-				return
-			default:
-				atomic.AddInt32(&r.numClients, 1)
-				go func(fn func()) {
-					for {
-						select {
-						case <-quit:
-							return
-						default:
-							if r.rateLimitEnabled {
-								blocked := r.rateLimiter.Acquire()
-								if !blocked {
-									r.safeRun(fn)
-								}
-							} else {
-								r.safeRun(fn)
+	// The spawn count indicates the numbers of simulated "users" that should
+	// be spawned. Each user then uses the provided tasks to perform a behavior.
+	for i := 0; i < spawnCount; i++ {
+		select {
+		case <-quit:
+			// The slave has been instructed to quit hatching.
+			return
+		default:
+			// Spawn a user routine.
+			go func() {
+				for {
+					select {
+					case <-quit:
+						// The user has been instructed to quit testing.
+						return
+					default:
+						// Check rate limiter
+						if r.rateLimitEnabled {
+							if blocked := r.rateLimiter.Acquire(); blocked {
+								continue
 							}
 						}
+
+						var selected *Task
+						if weightSum == 0 {
+							// Roll a random task because no task weights were
+							// provided to balance.
+							index := random.Int63n(int64(len(r.tasks)))
+							selected = r.tasks[index]
+						} else {
+							// Roll a random chance for a task to be performed.
+							index := random.Float64()
+							// fmt.Printf("Index is %f\n", index)
+
+							// Get the selected task by user behavior.
+							for _, task := range r.tasks {
+								percent := float64(task.Weight) / float64(weightSum)
+								// fmt.Printf("Percentage for \"%s\" is %f\n", task.Name, percent)
+								if index <= percent {
+									selected = task
+									break
+								}
+							}
+						}
+
+						// Perform the task.
+						if selected != nil {
+							// fmt.Printf("Selected task \"%s\"\n", selected.Name)
+							r.safeRun(selected.Fn)
+						}
 					}
-				}(task.Fn)
+				}
+			}()
+
+			// Increment the number of running clients.
+			atomic.AddInt32(&r.numClients, 1)
+
+			// The hatch rate indicates how quickly each user should be spawned.
+			// A hatch rate of 0 indicates it should hatch all users immediately.
+			if r.hatchRate != 0 && r.hatchType == "smooth" {
+				<-time.After(time.Second / time.Duration(r.hatchRate))
 			}
 		}
 	}
@@ -318,16 +344,15 @@ func (r *slaveRunner) close() {
 
 func (r *slaveRunner) onHatchMessage(msg *message) {
 	rate, _ := msg.Data["hatch_rate"]
-	clients, _ := msg.Data["num_clients"]
-
 	hatchRate := int(rate.(float64))
-	if hatchRate == 0 {
-		// A hatch rate of 0 here indicates that the hatching of the workers
-		// should be done immediately. This with a workaround for boomer
-		// having a different meaning for hatchRate.
-		hatchRate = 1
-	}
+	// 	if hatchRate == 0 {
+	// 		// A hatch rate of 0 here indicates that the hatching of the workers
+	// 		// should be done immediately. This with a workaround for boomer
+	// 		// having a different meaning for hatchRate.
+	// 		hatchRate = 1
+	// 	}
 
+	clients, _ := msg.Data["num_clients"]
 	workers := 0
 	if _, ok := clients.(uint64); ok {
 		workers = int(clients.(uint64))
@@ -338,21 +363,15 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 	log.Printf("Recv hatch message from master, num_clients is %d, hatch_rate is %d\n",
 		workers, hatchRate)
 
-	if workers == 0 {
-		// This is a valid scenario. The number of slaves exceeds the amount
-		// of work to be done. This slave should remain idle until given work.
-		return
-	} else {
-		r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
+	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 
-		Events.Publish("boomer:hatch", workers, hatchRate)
+	Events.Publish("boomer:hatch", workers, hatchRate)
 
-		if r.rateLimitEnabled {
-			r.rateLimiter.Start()
-		}
-
-		r.startHatching(workers, hatchRate, r.hatchComplete)
+	if r.rateLimitEnabled {
+		r.rateLimiter.Start()
 	}
+
+	r.startHatching(workers, hatchRate, r.hatchComplete)
 }
 
 // Runner acts as a state machine.
