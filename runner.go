@@ -191,7 +191,9 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 				log.Println("Hatch rate should be a 'smooth' client every 1 second")
 				<-time.After(time.Second)
 			} else {
-				duration := time.Second / time.Duration(r.hatchRate)
+				// We have to convert a second to a float64 so we don't drop precision.
+				value := float64(time.Second.Nanoseconds()) / r.hatchRate
+				duration, _ := time.ParseDuration(fmt.Sprintf("%dns", int64(value)))
 				log.Printf("Hatch rate should be a client every %s", duration.String())
 				<-time.After(duration)
 			}

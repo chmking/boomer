@@ -145,6 +145,31 @@ func TestSpawnWorkersSmoothly(t *testing.T) {
 	}
 }
 
+func TestSpawnWorkersSlowly(t *testing.T) {
+	taskA := &Task{
+		Weight: 10,
+		Fn: func() {
+			time.Sleep(time.Second)
+		},
+		Name: "TaskA",
+	}
+	tasks := []*Task{taskA}
+
+	runner := newSlaveRunner("localhost", 5557, tasks, nil, "asap")
+	defer runner.close()
+
+	runner.client = newClient("localhost", 5557, runner.nodeID)
+	runner.hatchRate = 0.1
+
+	go runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
+	time.Sleep(200 * time.Millisecond)
+
+	currentClients := atomic.LoadInt32(&runner.numClients)
+	if currentClients > 3 {
+		t.Error("Spawning goroutines too fast, current count", currentClients)
+	}
+}
+
 func TestHatchAndStop(t *testing.T) {
 	taskA := &Task{
 		Fn: func() {
