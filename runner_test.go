@@ -177,7 +177,7 @@ func TestHatchAndStop(t *testing.T) {
 
 	runner.startHatching(10, 10, runner.hatchComplete)
 	// wait for spawning goroutines
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
 	}
@@ -359,7 +359,7 @@ func TestOnMessage(t *testing.T) {
 	}
 
 	// hatch complete and running
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -382,7 +382,7 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -420,7 +420,7 @@ func TestOnMessage(t *testing.T) {
 	}
 
 	// hatch complete and running
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}

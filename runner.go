@@ -188,9 +188,12 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 
 			// The hatch rate indicates how quickly each user should be spawned.
 			if r.hatchRate == 0 || r.hatchType == "smooth" {
+				log.Println("Hatch rate should be a 'smooth' client every 1 second")
 				<-time.After(time.Second)
 			} else {
-				<-time.After(time.Duration(1.0/r.hatchRate) * time.Second)
+				duration := time.Second / time.Duration(r.hatchRate)
+				log.Printf("Hatch rate should be a client every %s", duration.String())
+				<-time.After(duration)
 			}
 		}
 	}
