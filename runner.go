@@ -35,7 +35,7 @@ type runner struct {
 	stats            *requestStats
 
 	numClients int32
-	hatchRate  int
+	hatchRate  float64
 
 	// all running workers(goroutines) will select on this channel.
 	// close this channel will stop all running workers.
@@ -187,9 +187,10 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 			atomic.AddInt32(&r.numClients, 1)
 
 			// The hatch rate indicates how quickly each user should be spawned.
-			// A hatch rate of 0 indicates it should hatch all users immediately.
-			if r.hatchRate != 0 && r.hatchType == "smooth" {
-				<-time.After(time.Second / time.Duration(r.hatchRate))
+			if r.hatchRate == 0 || r.hatchType == "smooth" {
+				<-time.After(time.Second)
+			} else {
+				<-time.After(time.Duration(1.0/r.hatchRate) * time.Second)
 			}
 		}
 	}
@@ -199,9 +200,7 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 	}
 }
 
-func (r *runner) startHatching(spawnCount int, hatchRate int, hatchCompleteFunc func()) {
-	fmt.Printf("startHatching was called with spawn count %d and hatchRate %d\n", spawnCount, hatchRate)
-
+func (r *runner) startHatching(spawnCount int, hatchRate float64, hatchCompleteFunc func()) {
 	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
 
@@ -237,7 +236,7 @@ type localRunner struct {
 	hatchCount int
 }
 
-func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatchType string, hatchRate int) (r *localRunner) {
+func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatchType string, hatchRate float64) (r *localRunner) {
 	r = &localRunner{}
 	r.tasks = tasks
 	r.hatchType = hatchType
@@ -344,13 +343,7 @@ func (r *slaveRunner) close() {
 
 func (r *slaveRunner) onHatchMessage(msg *message) {
 	rate, _ := msg.Data["hatch_rate"]
-	hatchRate := int(rate.(float64))
-	// 	if hatchRate == 0 {
-	// 		// A hatch rate of 0 here indicates that the hatching of the workers
-	// 		// should be done immediately. This with a workaround for boomer
-	// 		// having a different meaning for hatchRate.
-	// 		hatchRate = 1
-	// 	}
+	hatchRate := rate.(float64)
 
 	clients, _ := msg.Data["num_clients"]
 	workers := 0
@@ -360,21 +353,17 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 		workers = int(clients.(int64))
 	}
 
-	log.Printf("Recv hatch message from master, num_clients is %d, hatch_rate is %d\n",
+	log.Printf("Recv hatch message from master, num_clients is %d, hatch_rate is %f\n",
 		workers, hatchRate)
 
-	log.Print("calling sendChannel 'hatching'")
 	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 
-	log.Print("publishing 'boomer:hatch'")
-	Events.Publish("boomer:hatch", workers, hatchRate)
+	Events.Publish("boomer:hatch", workers, int(hatchRate))
 
-	log.Print("starting rate limiter")
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
 	}
 
-	log.Print("starting hatching")
 	r.startHatching(workers, hatchRate, r.hatchComplete)
 }
 
@@ -386,7 +375,6 @@ func (r *slaveRunner) onMessage(msg *message) {
 	case stateInit:
 		switch msg.Type {
 		case "hatch":
-			log.Println("Received a hatch message while init")
 			r.state = stateHatching
 			r.onHatchMessage(msg)
 		case "quit":
@@ -397,7 +385,6 @@ func (r *slaveRunner) onMessage(msg *message) {
 	case stateRunning:
 		switch msg.Type {
 		case "hatch":
-			log.Println("Received a hatch message while hatching or running")
 			r.state = stateHatching
 			r.stop()
 			r.onHatchMessage(msg)
@@ -417,7 +404,6 @@ func (r *slaveRunner) onMessage(msg *message) {
 	case stateStopped:
 		switch msg.Type {
 		case "hatch":
-			log.Println("Received a hatch message while stopped")
 			r.state = stateHatching
 			r.onHatchMessage(msg)
 		case "quit":

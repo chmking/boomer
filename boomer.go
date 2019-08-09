@@ -40,7 +40,7 @@ type Boomer struct {
 
 	localRunner *localRunner
 	hatchCount  int
-	hatchRate   int
+	hatchRate   float64
 
 	cpuProfile         string
 	cpuProfileDuration time.Duration
@@ -62,7 +62,7 @@ func NewBoomer(masterHost string, masterPort int) *Boomer {
 }
 
 // NewStandaloneBoomer returns a new Boomer, which can run without master.
-func NewStandaloneBoomer(hatchCount int, hatchRate int) *Boomer {
+func NewStandaloneBoomer(hatchCount int, hatchRate float64) *Boomer {
 	return &Boomer{
 		hatchType:  "asap",
 		hatchCount: hatchCount,
